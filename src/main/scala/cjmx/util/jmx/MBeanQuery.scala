@@ -1,14 +1,19 @@
 package cjmx.util.jmx
 
-import javax.management.{ObjectName, QueryExp}
+import javax.management.{Attribute, ObjectName, QueryExp}
+
+//TODO: QueryExpr needs to change,
 
 /** Represents a where for MBeans that match an expression. */
-case class MBeanQuery(from: Option[ObjectName], where: Option[QueryExp])
+case class MBeanQuery(from: Map[String, (Option[ObjectName], Option[QueryExp])],
+                      where: Option[Seq[(String,Attribute)] => Boolean] = None)
 
 object MBeanQuery {
-  def All = MBeanQuery(None, None)
-  def apply(from: ObjectName): MBeanQuery = MBeanQuery(Some(from), None)
-  def apply(where: QueryExp): MBeanQuery = MBeanQuery(None, Some(where))
-  def apply(from: ObjectName, where: QueryExp): MBeanQuery = MBeanQuery(Some(from), Some(where))
+  private val unnamed = "#0" // used when user does not name a query clause
+
+  def All = MBeanQuery(Map(unnamed -> ((None,None))), None)
+
+  def Single(from: ObjectName, where: Option[QueryExp] = None): MBeanQuery =
+    MBeanQuery(Map(unnamed -> ((Some(from), where))))
 }
 

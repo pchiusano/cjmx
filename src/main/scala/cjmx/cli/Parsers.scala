@@ -62,9 +62,10 @@ object Parsers {
 
   private def MBeanQueryP(svr: MBeanServerConnection): Parser[MBeanQuery] =
     for {
+      // TODO: generalize this piece to return a Map of some sort
       name <- QuotedObjectNameParser(svr)
       query <- (token(" where ") ~> JMXParsers.QueryExpParser(svr, name)).?
-    } yield MBeanQuery(Some(name), query)
+    } yield MBeanQuery.Single(name, query)
 
   private def PrefixNames(svr: MBeanServerConnection): Parser[actions.ManagedObjectNames] =
     (token("names") ^^^ actions.ManagedObjectNames(MBeanQuery.All)) |
@@ -93,6 +94,7 @@ object Parsers {
       case projection => actions.Query(query, projection)
     }
 
+  // TODO: this should return a Seq[(String,Attribute)] => Seq[(String,Attribute)]
   private def SelectClause(svr: MBeanServerConnection, query: Option[MBeanQuery]): Parser[Seq[Attribute] => Seq[Attribute]] =
     (token("select ") ~> SpaceClass.* ~> JMXParsers.Projection(svr, query))
 

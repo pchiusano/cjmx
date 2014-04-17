@@ -16,8 +16,16 @@ trait RichMBeanServerConnection extends Ops[MBeanServerConnection] {
   def queryNames(name: Option[ObjectName], query: Option[QueryExp]): Set[ObjectName] =
     self.queryNames(name.orNull, query.orNull).asScala.toSet
 
-  def queryNames(query: MBeanQuery): Set[ObjectName] =
-    queryNames(query.from, query.where)
+  def queryNames(query: MBeanQuery): Set[ObjectName] = {
+    val results: List[(String,Set[ObjectName])] =
+      query.from.toList.map { case (lbl, (name,query)) =>
+        lbl -> queryNames(name, query)
+      }
+    if (query.where.isEmpty)
+      results.map(_._2).flatten.toSet
+    else
+      sys.error("todo")
+  }
 
   def mbeanInfo(name: ObjectName): Option[MBeanInfo] =
     Option(self.getMBeanInfo(name))

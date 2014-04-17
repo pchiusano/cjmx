@@ -42,7 +42,7 @@ class ProjectionParserTest extends FunSuite with Matchers {
   }
 
   private def parse(str: String): Either[String, Seq[Attribute] => Seq[Attribute]] =
-    Parser.parse(str, JMXParsers.Projection(ManagementFactory.getPlatformMBeanServer, Some(MBeanQuery(new ObjectName("java.lang:type=Memory")))))
+    Parser.parse(str, JMXParsers.Projection(ManagementFactory.getPlatformMBeanServer, Some(MBeanQuery.Single(new ObjectName("java.lang:type=Memory")))))
 
   private def heapMemoryUsage(init: Long, committed: Long, used: Long, max: Long): Attribute =
     new Attribute("HeapMemoryUsage", memoryComposite(init, committed, used, max))

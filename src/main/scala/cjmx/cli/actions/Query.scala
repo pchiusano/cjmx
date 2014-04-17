@@ -9,6 +9,7 @@ import javax.management.{Attribute, ObjectName, QueryExp}
 import cjmx.util.jmx._
 
 
+// just a question of extending this to allow multiple sources
 case class Query(query: MBeanQuery, projection: Seq[Attribute] => Seq[Attribute] = identity) extends SimpleConnectedAction {
   def act(context: ActionContext, connection: JMXConnection) = {
     val svr = connection.mbeanServer
