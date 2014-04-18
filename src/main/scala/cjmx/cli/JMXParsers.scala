@@ -20,7 +20,7 @@ import MoreParsers._
 
 import cjmx.ext.AttributePathValueExp
 import cjmx.util.Math.liftToBigDecimal
-import cjmx.util.jmx.{JMX, MBeanQuery}
+import cjmx.util.jmx.{JMX, MBeanQuery, MBeanResult}
 import cjmx.util.jmx.JMX._
 
 
@@ -258,35 +258,34 @@ object JMXParsers {
   }
 
 
-  def Projection(svr: MBeanServerConnection, query: Option[MBeanQuery]): Parser[Seq[Attribute] => Seq[Attribute]] = {
+  def Projection(svr: MBeanServerConnection, query: Option[MBeanQuery]): Parser[Parsers.ProjectionF] = {
     val getAttributeNames = svr.getMBeanInfo(_: ObjectName).getAttributes.map { _.getName }.toSet
-    val attributeNames = query.cata(q => safely(Set.empty[String]) { svr.toScala.queryNames(q).flatMap(getAttributeNames) }, Set.empty[String])
+    val attributeNames = query.map(q => safely(Set.empty[String]) {
+      svr.toScala.queryNames(q).flatMap(getAttributeNames)
+    }).getOrElse { Set.empty[String] }
     new ProjectionProductions(attributeNames).Projection
   }
 
   private class ProjectionProductions(attributeNames: Set[String]) {
 
-    lazy val Projection = {
-      (token("*") ^^^ (identity[Seq[Attribute]] _)) |
-      (rep1sep(Attribute, ws.* ~ ',' ~ ws.*) map { attrMappings =>
-        (attrs: Seq[Attribute]) => {
-          val attrsAsMap = attrs.map { attr => attr.getName -> attr.getValue }.toMap
-          attrMappings.foldLeft(Seq.empty[Attribute]) { (acc, mapping) =>
-            val attr = mapping(attrsAsMap).map { case (k, v) => new Attribute(k, v) }
-            attr.cata(a => acc :+ a, acc)
-          }
+    lazy val Projection: Parser[Parsers.ProjectionF] = {
+      (token("*") ^^^ (identity[Map[String,MBeanResult]] _)) |
+      (rep1sep(Attribute, ws.* ~ ',' ~ ws.*) map { projs =>
+        (attrs: Map[String,MBeanResult]) => {
+          projs.map { (p: Parsers.ProjectionF) => p(attrs) }.foldLeft(Map[String,AnyRef]())(_ ++ _)
         }
       })
     }
 
-    lazy val Attribute: Parser[Map[String, AnyRef] => Option[(String, AnyRef)]] =
+    lazy val Attribute: Parser[Parsers.ProjectionF] =
       token(UnnamedAttribute) ~ (token(" as ") ~> Identifier(SQuoteChar, DQuoteChar)).? map {
-        case f ~ Some(t) => attrs => f(attrs) map { case (_, v) => (t, v) }
-        case f ~ None => f
+        case f ~ Some(t) => attrs => f(attrs).map { case (_, v) => Map(t -> v) }.getOrElse(Map())
+        case f ~ None => f andThen (_.map(Map() + _).getOrElse(Map()))
       }
 
-    lazy val UnnamedAttribute: Parser[Map[String, AnyRef] => Option[(String, AnyRef)]] = new ExpressionParser {
-      override type Expression = Map[String, AnyRef] => Option[(String, AnyRef)]
+    // TODO: handle qualified attributes
+    lazy val UnnamedAttribute: Parser[Map[String,MBeanResult] => Option[(String,AnyRef)]] = new ExpressionParser {
+      override type Expression = Map[String,MBeanResult] => Option[(String,AnyRef)]
       override def multiply(lhs: Expression, rhs: Expression) = attrs => apply(Ops.Multiplication, attrs, lhs, rhs)
       override def divide(lhs: Expression, rhs: Expression) = attrs => apply(Ops.Division, attrs, lhs, rhs)
       override def add(lhs: Expression, rhs: Expression) = attrs => apply(Ops.Addition, attrs, lhs, rhs)
@@ -322,7 +321,7 @@ object JMXParsers {
         }
       }
 
-      private def apply(op: Op, attrs: Map[String, AnyRef], lhs: Expression, rhs: Expression) = {
+      private def apply(op: Op, attrs: Map[String,MBeanResult], lhs: Expression, rhs: Expression) = {
         for {
           (leftName, leftValue) <- lhs(attrs)
           (rightName, rightValue) <- rhs(attrs)

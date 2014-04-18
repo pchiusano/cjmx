@@ -12,7 +12,7 @@ import scala.collection.JavaConverters._
 
 import javax.management._
 
-import cjmx.util.jmx.MBeanQuery
+import cjmx.util.jmx.{MBeanQuery,MBeanResult}
 import JMXParsers._
 
 
@@ -94,8 +94,11 @@ object Parsers {
       case projection => actions.Query(query, projection)
     }
 
-  // TODO: this should return a Seq[(String,Attribute)] => Seq[(String,Attribute)]
-  private def SelectClause(svr: MBeanServerConnection, query: Option[MBeanQuery]): Parser[Seq[Attribute] => Seq[Attribute]] =
+  // type ProjectionF = Map[String,MBeanResult] => Map[String,MBeanResult]
+  // need to update this
+  type ProjectionF = Map[String,MBeanResult] => Map[String,AnyRef]
+
+  private def SelectClause(svr: MBeanServerConnection, query: Option[MBeanQuery]): Parser[ProjectionF] =
     (token("select ") ~> SpaceClass.* ~> JMXParsers.Projection(svr, query))
 
   private def PrefixSample(svr: MBeanServerConnection): Parser[actions.Sample] =
@@ -108,7 +111,7 @@ object Parsers {
       case projection ~ timing => actions.Sample(actions.Query(query, projection), timing._1, timing._2)
     }
 
-  private def SampleClause(svr: MBeanServerConnection, query: Option[MBeanQuery]): Parser[Seq[Attribute] => Seq[Attribute]] =
+  private def SampleClause(svr: MBeanServerConnection, query: Option[MBeanQuery]): Parser[ProjectionF] =
     (token("sample ") ~> SpaceClass.* ~> JMXParsers.Projection(svr, query))
 
   private def SampleTimingClause: Parser[(Int, Int)] =

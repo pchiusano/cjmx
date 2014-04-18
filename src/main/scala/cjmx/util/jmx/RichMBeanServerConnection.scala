@@ -16,6 +16,8 @@ trait RichMBeanServerConnection extends Ops[MBeanServerConnection] {
   def queryNames(name: Option[ObjectName], query: Option[QueryExp]): Set[ObjectName] =
     self.queryNames(name.orNull, query.orNull).asScala.toSet
 
+  // def query(q: MBeanQuery): Map[String,MBeanResult]
+
   def queryNames(query: MBeanQuery): Set[ObjectName] = {
     val results: List[(String,Set[ObjectName])] =
       query.from.toList.map { case (lbl, (name,query)) =>
