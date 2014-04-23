@@ -6,7 +6,7 @@ import scala.collection.JavaConverters._
 /** Typed API for interacting with MBeans. */
 object Beans extends ToRichMBeanServerConnection {
 
-  private val unnamed = SubqueryName("#0") // used when user does not name the subquery
+  private[cjmx] val unnamed = SubqueryName("#0") // used when user does not name the subquery
 
   // newtyping these to keep them straight
 
@@ -23,9 +23,31 @@ object Beans extends ToRichMBeanServerConnection {
       conn.queryNames(pattern, where.orNull).asScala.toSet
   }
 
+  case class Where(restrictions: Map[SubqueryName, QueryExp],
+                   clientSideFilter: Results => Set[ObjectName]) {
+    def apply(q: Query): Query =
+      sys.error("TODO: apply the restrictions server side, and delegate the rest to be run client side")
+
+    def and(w2: Where): Where =
+      sys.error("TODO")
+
+    def or(w: Where): Where =
+      sys.error("TODO")
+
+    def not: Where =
+      sys.error("TODO")
+  }
+
+  object Where {
+    def id = Where(Map(), _.names)
+  }
+
   case class Query(subqueries: Map[SubqueryName, Subquery],
                    where: Results => Set[ObjectName] = (rs => rs.names),
                    project: Results => Seq[Result] = (rs => rs.results)) {
+
+    def restrict(where2: Results => Set[ObjectName]): Query =
+      Query(subqueries, res => where(res) intersect where2(res), project)
 
     def run(conn: MBeanServerConnection): Seq[Result] = {
       val objNames = subqueries.values.map(_.run(conn)).foldLeft(Set[ObjectName]())(_ ++ _)
@@ -38,6 +60,12 @@ object Beans extends ToRichMBeanServerConnection {
       }
       ???
     }
+
+    def names: Set[ObjectName] =
+      subqueries.values.map(_.pattern).toSet
+
+    def subqueryNames: Map[SubqueryName, ObjectName] =
+      subqueries.mapValues(_.pattern)
   }
 
   object Query {
@@ -48,6 +76,9 @@ object Beans extends ToRichMBeanServerConnection {
 
     def byName(pattern: String): Query =
       Single(Some(new ObjectName(pattern)), None)
+
+    def byName(name: ObjectName): Query =
+      Single(Some(name), None)
   }
 
   /**

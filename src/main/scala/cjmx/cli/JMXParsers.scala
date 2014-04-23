@@ -135,17 +135,18 @@ object JMXParsers {
     }
   }
 
-
-  def QueryExpParser(svr: MBeanServerConnection, name: ObjectName): Parser[QueryExp] = {
-    val attributeNames = safely(Set.empty[String]) {
-      svr.toScala.queryNames(Some(name), None).flatMap { n =>
-        svr.getMBeanInfo(n).getAttributes.map { _.getName }.toSet
+  def QueryExpParser(svr: MBeanServerConnection, names: Map[B.SubqueryName, ObjectName]): Parser[B.Where] = {
+    val attributeNames = safely(Map[B.SubqueryName, Set[B.AttributeName]]()) {
+      names.mapValues { name =>
+        svr.toScala.queryNames(Some(name), None).flatMap { n =>
+          svr.getMBeanInfo(n).getAttributes.map { a => B.AttributeName(a.getName) }.toSet
+        }
       }
     }
     new QueryExpProductions(attributeNames).Query
   }
 
-  private class QueryExpProductions(attributeNames: Set[String]) {
+  private class QueryExpProductions(attributeNames: Map[B.SubqueryName, Set[B.AttributeName]]) {
     import javax.management.{Query => Q}
 
     lazy val Query: Parser[QueryExp] =
@@ -237,6 +238,12 @@ object JMXParsers {
       ss <- StringLiteral
     } yield Q.anySubString(lhs, ss)
 
+    val attributeExamples: Set[String] = attributeNames.toList.flatMap {
+      case (subqueryName, attrNames) =>
+        if (subqueryName == B.unnamed) attrNames.map(_.name)
+        else attrNames.map(a => subqueryName.get + "." + a)
+    }.toSet
+
     lazy val Value: Parser[ValueExp] = new ExpressionParser {
       override type Expression = ValueExp
       override def multiply(lhs: ValueExp, rhs: ValueExp) = Q.times(lhs, rhs)
@@ -244,7 +251,7 @@ object JMXParsers {
       override def add(lhs: ValueExp, rhs: ValueExp) = Q.plus(lhs, rhs)
       override def subtract(lhs: ValueExp, rhs: ValueExp) = Q.minus(lhs, rhs)
       override lazy val Value = Attribute | Literal
-    }.Expr.examples(Set("<value>", "<attribute>") ++ attributeNames)
+    }.Expr.examples(Set("<value>", "<attribute>") ++ attributeExamples)
 
     lazy val Attribute = (NonQualifiedAttribute | QualifiedAttribute | AttributePath).examples("<attribute>")
     lazy val NonQualifiedAttribute = Identifier(DQuoteChar) map Q.attr

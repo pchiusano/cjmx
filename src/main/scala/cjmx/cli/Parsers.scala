@@ -60,11 +60,15 @@ object Parsers {
     } yield action
 
 
+  private def subqueriesP(svr: MBeanServerConnection): Parser[B.Query] =
+    // TODO: allow comma separated 'java.lang:*' langs, 'java.nio:*' nio
+    QuotedObjectNameParser(svr).map(B.Query.byName)
+
   private def MBeanQueryP(svr: MBeanServerConnection): Parser[B.Query] =
     for {
-      name <- QuotedObjectNameParser(svr)
-      query <- (token(" where ") ~> JMXParsers.QueryExpParser(svr, name)).?
-    } yield B.Query.Single(Some(name), query)
+      subs <- subqueriesP(svr)
+      query <- (token(" where ") ~> JMXParsers.QueryExpParser(svr, subs.subqueryNames)).?
+    } yield query.getOrElse(B.Where.id)(subs)
 
   private def PrefixNames(svr: MBeanServerConnection): Parser[actions.ManagedObjectNames] =
     (token("names") ^^^ actions.ManagedObjectNames(B.Query.All)) |
