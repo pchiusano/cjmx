@@ -24,8 +24,8 @@ object Beans extends ToRichMBeanServerConnection {
   }
 
   case class Query(subqueries: Map[SubqueryName, Subquery],
-                   where: Results => Seq[ObjectName],
-                   project: Results => Seq[Result]) {
+                   where: Results => Set[ObjectName] = (rs => rs.names),
+                   project: Results => Seq[Result] = (rs => rs.results)) {
 
     def run(conn: MBeanServerConnection): Seq[Result] = {
       val objNames = subqueries.values.map(_.run(conn)).foldLeft(Set[ObjectName]())(_ ++ _)
@@ -38,6 +38,10 @@ object Beans extends ToRichMBeanServerConnection {
       }
       ???
     }
+  }
+
+  object Query {
+    val All = Query(Map(unnamed -> Subquery(unnamed, ObjectName.WILDCARD, None)))
   }
 
   /**
@@ -96,5 +100,8 @@ object Beans extends ToRichMBeanServerConnection {
       attributes.get(k)
   }
 
-  case class Results(subqueries: Map[SubqueryName, Seq[Result]])
+  case class Results(subqueries: Map[SubqueryName, Seq[Result]]) {
+    def names: Set[ObjectName] = subqueries.values.flatMap(results => results.map(_.name)).toSet
+    def results: Seq[Result] = subqueries.values.flatten.toSeq
+  }
 }
