@@ -8,9 +8,10 @@ import Scalaz._
 import javax.management._
 
 import cjmx.util.jmx._
+import cjmx.util.jmx.{Beans => B}
 
 
-case class InvokeOperation(query: MBeanQuery, operationName: String, params: Seq[AnyRef]) extends ConnectedAction {
+case class InvokeOperation(query: B.Query, operationName: String, params: Seq[AnyRef]) extends ConnectedAction {
   def applyConnected(context: ActionContext, connection: JMXConnection) = {
     val svr = connection.mbeanServer
     val names = svr.toScala.queryNames(query).toSeq.sorted

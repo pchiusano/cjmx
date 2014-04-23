@@ -12,7 +12,7 @@ import scala.collection.JavaConverters._
 
 import javax.management._
 
-import cjmx.util.jmx.MBeanQuery
+import cjmx.util.jmx.{Beans => B}
 import JMXParsers._
 
 
@@ -60,17 +60,17 @@ object Parsers {
     } yield action
 
 
-  private def MBeanQueryP(svr: MBeanServerConnection): Parser[MBeanQuery] =
+  private def MBeanQueryP(svr: MBeanServerConnection): Parser[B.Query] =
     for {
       name <- QuotedObjectNameParser(svr)
       query <- (token(" where ") ~> JMXParsers.QueryExpParser(svr, name)).?
-    } yield MBeanQuery(Some(name), query)
+    } yield B.Query(Some(name), query)
 
   private def PrefixNames(svr: MBeanServerConnection): Parser[actions.ManagedObjectNames] =
-    (token("names") ^^^ actions.ManagedObjectNames(MBeanQuery.All)) |
+    (token("names") ^^^ actions.ManagedObjectNames(B.Query.All)) |
     (token("names ") ~> MBeanQueryP(svr) map { case query => actions.ManagedObjectNames(query) })
 
-  private def PostfixNames(svr: MBeanServerConnection, query: MBeanQuery): Parser[actions.ManagedObjectNames] =
+  private def PostfixNames(svr: MBeanServerConnection, query: B.Query): Parser[actions.ManagedObjectNames] =
     token("names") ^^^ actions.ManagedObjectNames(query)
 
   private def PrefixDescribe(svr: MBeanServerConnection): Parser[actions.DescribeMBeans] =
@@ -78,7 +78,7 @@ object Parsers {
       case detailed ~ query => actions.DescribeMBeans(query, detailed)
     }
 
-  private def PostfixDescribe(svr: MBeanServerConnection, query: MBeanQuery): Parser[actions.DescribeMBeans] =
+  private def PostfixDescribe(svr: MBeanServerConnection, query: B.Query): Parser[actions.DescribeMBeans] =
     (token("describe") ~> flag(" -d")) map {
       case detailed => actions.DescribeMBeans(query, detailed)
     }
@@ -88,12 +88,12 @@ object Parsers {
       case projection ~ query => actions.Query(query, projection)
     }
 
-  private def PostfixSelect(svr: MBeanServerConnection, query: MBeanQuery): Parser[actions.Query] =
+  private def PostfixSelect(svr: MBeanServerConnection, query: B.Query): Parser[actions.Query] =
     SelectClause(svr, Some(query)) map {
       case projection => actions.Query(query, projection)
     }
 
-  private def SelectClause(svr: MBeanServerConnection, query: Option[MBeanQuery]): Parser[Seq[Attribute] => Seq[Attribute]] =
+  private def SelectClause(svr: MBeanServerConnection, query: Option[B.Query]): Parser[Seq[Attribute] => Seq[Attribute]] =
     (token("select ") ~> SpaceClass.* ~> JMXParsers.Projection(svr, query))
 
   private def PrefixSample(svr: MBeanServerConnection): Parser[actions.Sample] =
@@ -101,12 +101,12 @@ object Parsers {
       case projection ~ query ~ timing => actions.Sample(actions.Query(query, projection), timing._1, timing._2)
     }
 
-  private def PostfixSample(svr: MBeanServerConnection, query: MBeanQuery): Parser[actions.Sample] =
+  private def PostfixSample(svr: MBeanServerConnection, query: B.Query): Parser[actions.Sample] =
     (SampleClause(svr, Some(query)) ~ SampleTimingClause) map {
       case projection ~ timing => actions.Sample(actions.Query(query, projection), timing._1, timing._2)
     }
 
-  private def SampleClause(svr: MBeanServerConnection, query: Option[MBeanQuery]): Parser[Seq[Attribute] => Seq[Attribute]] =
+  private def SampleClause(svr: MBeanServerConnection, query: Option[B.Query]): Parser[Seq[Attribute] => Seq[Attribute]] =
     (token("sample ") ~> SpaceClass.* ~> JMXParsers.Projection(svr, query))
 
   private def SampleTimingClause: Parser[(Int, Int)] =
@@ -117,7 +117,7 @@ object Parsers {
       case ((opName, args)) ~ query => actions.InvokeOperation(query, opName, args)
     }
 
-  private def PostfixInvoke(svr: MBeanServerConnection, query: MBeanQuery): Parser[actions.InvokeOperation] =
+  private def PostfixInvoke(svr: MBeanServerConnection, query: B.Query): Parser[actions.InvokeOperation] =
     (token("invoke ") ~> SpaceClass.* ~> JMXParsers.Invocation(svr, Some(query))) map {
       case opName ~ args => actions.InvokeOperation(query, opName, args)
     }

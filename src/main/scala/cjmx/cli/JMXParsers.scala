@@ -20,7 +20,8 @@ import MoreParsers._
 
 import cjmx.ext.AttributePathValueExp
 import cjmx.util.Math.liftToBigDecimal
-import cjmx.util.jmx.{JMX, MBeanQuery}
+import cjmx.util.jmx.JMX
+import cjmx.util.jmx.{Beans => B}
 import cjmx.util.jmx.JMX._
 
 
@@ -258,7 +259,7 @@ object JMXParsers {
   }
 
 
-  def Projection(svr: MBeanServerConnection, query: Option[MBeanQuery]): Parser[Seq[Attribute] => Seq[Attribute]] = {
+  def Projection(svr: MBeanServerConnection, query: Option[B.Query]): Parser[Seq[Attribute] => Seq[Attribute]] = {
     val getAttributeNames = svr.getMBeanInfo(_: ObjectName).getAttributes.map { _.getName }.toSet
     val attributeNames = query.cata(q => safely(Set.empty[String]) { svr.toScala.queryNames(q).flatMap(getAttributeNames) }, Set.empty[String])
     new ProjectionProductions(attributeNames).Projection
@@ -340,13 +341,13 @@ object JMXParsers {
       })
   }
 
-  def Invocation(svr: MBeanServerConnection, query: Option[MBeanQuery]): Parser[(String, Seq[AnyRef])] =
+  def Invocation(svr: MBeanServerConnection, query: Option[B.Query]): Parser[(String, Seq[AnyRef])] =
     OperationName(svr, query) ~ (token("(") ~> repsep(ws.* ~> InvocationParameter(svr), ws.* ~ ',') <~ token(")"))
 
-  private def OperationName(svr: MBeanServerConnection, query: Option[MBeanQuery]): Parser[String] = {
+  private def OperationName(svr: MBeanServerConnection, query: Option[B.Query]): Parser[String] = {
     val ops: Set[String] = safely(Set.empty[String]) {
       for {
-        q <- query.toSet: Set[MBeanQuery]
+        q <- query.toSet: Set[B.Query]
         n <- svr.queryNames(q)
         i <- svr.mbeanInfo(n).toSet: Set[MBeanInfo]
         o <- i.getOperations

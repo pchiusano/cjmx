@@ -7,9 +7,10 @@ import scalaz.syntax.show._
 import javax.management.{Attribute, ObjectName, QueryExp}
 
 import cjmx.util.jmx._
+import cjmx.util.jmx.{Beans => B}
 
 
-case class Query(query: MBeanQuery, projection: Seq[Attribute] => Seq[Attribute] = identity) extends SimpleConnectedAction {
+case class Query(query: B.Query, projection: Seq[Attribute] => Seq[Attribute] = identity) extends SimpleConnectedAction {
   def act(context: ActionContext, connection: JMXConnection) = {
     val svr = connection.mbeanServer
     val names = svr.toScala.queryNames(query).toList.sorted

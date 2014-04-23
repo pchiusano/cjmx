@@ -1,13 +1,11 @@
 package cjmx.util.jmx
 
-import scala.collection.JavaConverters._
-import scala.language.implicitConversions
-
-import scalaz.syntax.Ops
-
+import cjmx.util.jmx.{Beans => B}
 import java.rmi.UnmarshalException
 import javax.management._
-
+import scala.collection.JavaConverters._
+import scala.language.implicitConversions
+import scalaz.syntax.Ops
 
 trait RichMBeanServerConnection extends Ops[MBeanServerConnection] {
 
@@ -16,8 +14,8 @@ trait RichMBeanServerConnection extends Ops[MBeanServerConnection] {
   def queryNames(name: Option[ObjectName], query: Option[QueryExp]): Set[ObjectName] =
     self.queryNames(name.orNull, query.orNull).asScala.toSet
 
-  def queryNames(query: MBeanQuery): Set[ObjectName] =
-    queryNames(query.from, query.where)
+  def queryNames(query: B.Query): Set[ObjectName] =
+    sys.error("TODO")
 
   def mbeanInfo(name: ObjectName): Option[MBeanInfo] =
     Option(self.getMBeanInfo(name))
