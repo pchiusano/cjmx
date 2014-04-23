@@ -42,6 +42,12 @@ object Beans extends ToRichMBeanServerConnection {
 
   object Query {
     val All = Query(Map(unnamed -> Subquery(unnamed, ObjectName.WILDCARD, None)))
+
+    def Single(name: Option[ObjectName], where: Option[QueryExp]): Query =
+      Query(Map(unnamed -> Subquery(unnamed, name.getOrElse(ObjectName.WILDCARD), where)))
+
+    def byName(pattern: String): Query =
+      Single(Some(new ObjectName(pattern)), None)
   }
 
   /**

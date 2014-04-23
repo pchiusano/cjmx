@@ -64,7 +64,7 @@ object Parsers {
     for {
       name <- QuotedObjectNameParser(svr)
       query <- (token(" where ") ~> JMXParsers.QueryExpParser(svr, name)).?
-    } yield B.Query(Some(name), query)
+    } yield B.Query.Single(Some(name), query)
 
   private def PrefixNames(svr: MBeanServerConnection): Parser[actions.ManagedObjectNames] =
     (token("names") ^^^ actions.ManagedObjectNames(B.Query.All)) |
