@@ -1,6 +1,6 @@
 package cjmx.util.jmx
 
-import javax.management.{MBeanServerConnection,ObjectName,QueryExp,Query=>Q,StringValueExp}
+import javax.management.{MBeanServerConnection,ObjectName,QueryExp,Query=>Q,StringValueExp,ValueExp}
 import scala.collection.JavaConverters._
 
 /** Typed API for interacting with MBeans. */
@@ -21,6 +21,62 @@ object Beans extends ToRichMBeanServerConnection {
   case class Subquery(name: SubqueryName, pattern: ObjectName, where: Option[QueryExp]) {
     def run(conn: MBeanServerConnection): Set[ObjectName] =
       conn.queryNames(pattern, where.orNull).asScala.toSet
+  }
+
+  /**
+   * Represents a single field extracted from one or more beans.
+   * Where possible tries to run the entire expression remotely.
+   */
+  trait Field[Exp] {
+    import Field._
+
+    def combine(b: Field[Exp])(remotely: (Exp,Exp) => Exp,
+                               locally: (AnyRef,AnyRef) => Option[AnyRef]): Field[Exp] = (this,b) match {
+      case (Remote(s1, e1, f1), Remote(s2, e2, f2)) if s1.orElse(s2) == s2 =>
+        val f3 = (res: Results) => for { a <- f1(res); b <- f2(res); c <- locally(a,b) } yield c
+        Remote(s1, remotely(e1,e2), f3)
+      case _ =>
+        val f1 = this.locally
+        val f2 = b.locally
+        Local { (res: Results) => for { a <- f1(res); b <- f2(res); c <- locally(a,b) } yield c }
+    }
+
+    def combineNumeric(b: Field[ValueExp])(
+        remotely: (ValueExp,ValueExp) => ValueExp,
+        locally: (BigDecimal,BigDecimal) => BigDecimal)(
+        implicit E: Exp =:= ValueExp): Field[ValueExp] =
+      this.asInstanceOf[Field[ValueExp]].combine(b)(remotely, (a,b) => {
+        for { a <- cjmx.util.Math.liftToBigDecimal(a)
+              b <- cjmx.util.Math.liftToBigDecimal(b)
+            } yield (a + b)
+      })
+
+    def +(b: Field[ValueExp])(implicit E: Exp =:= ValueExp): Field[ValueExp] =
+      this.combineNumeric(b)(Q.plus, _ + _)
+    def -(b: Field[ValueExp])(implicit E: Exp =:= ValueExp): Field[ValueExp] =
+      this.combineNumeric(b)(Q.minus, _ - _)
+    def *(b: Field[ValueExp])(implicit E: Exp =:= ValueExp): Field[ValueExp] =
+      this.combineNumeric(b)(Q.times, _ * _)
+    def /(b: Field[ValueExp])(implicit E: Exp =:= ValueExp): Field[ValueExp] =
+      this.combineNumeric(b)(Q.div, _ / _)
+
+    def locally: Results => Option[AnyRef] = this match {
+      case Local(f) => f
+      case Remote(_, _, f) => f
+    }
+  }
+
+  object Field {
+    /** A field expression that will be evaluated remotely. */
+    case class Remote[Exp](
+      subquery: Option[SubqueryName], // None indicates this is a literal
+      expression: Exp,
+      locally: Results => Option[AnyRef]) extends Field[Exp]
+
+    /** A field expression that will evaluated client side. */
+    case class Local[Exp](f: Results => Option[AnyRef]) extends Field[Exp]
+
+    // def lit(s: String)
   }
 
   case class Where(restrictions: Map[SubqueryName, QueryExp],
