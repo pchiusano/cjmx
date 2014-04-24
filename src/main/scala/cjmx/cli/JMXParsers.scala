@@ -136,6 +136,7 @@ object JMXParsers {
   }
 
   def QueryExpParser(svr: MBeanServerConnection, names: Map[B.SubqueryName, ObjectName]): Parser[B.Where] = {
+    // todo - might as well pull in the object name keys
     val attributeNames = safely(Map[B.SubqueryName, Set[B.AttributeName]]()) {
       names.mapValues { name =>
         svr.toScala.queryNames(Some(name), None).flatMap { n =>
@@ -149,31 +150,33 @@ object JMXParsers {
   private class QueryExpProductions(attributeNames: Map[B.SubqueryName, Set[B.AttributeName]]) {
     import javax.management.{Query => Q}
 
-    lazy val Query: Parser[QueryExp] =
+    lazy val Query: Parser[B.Where] =
       (AndQuery ~ (
-        (ws.* ~> token("or ") ~> ws.* ~> AndQuery <~ ws.*) map { q => Q.or(_: QueryExp, q) }
+        (ws.* ~> token("or ") ~> ws.* ~> AndQuery <~ ws.*) map { q => (w: B.Where) => w.or(q) }
       ).*) map { case p ~ seq => seq.foldLeft(p) { (acc, q) => q(acc) } }
 
-    lazy val AndQuery: Parser[QueryExp] =
+    lazy val AndQuery: Parser[B.Where] =
       (Predicate ~ (
-        (ws.* ~> token("and ") ~> ws.* ~> Predicate <~ ws.*) map { q => Q.and(_: QueryExp, q) }
+        (ws.* ~> token("and ") ~> ws.* ~> Predicate <~ ws.*) map { q => (w: B.Where) => w.and(q) }
       ).*) map { case p ~ seq => seq.foldLeft(p) { (acc, q) => q(acc) } }
 
     lazy val Not = token("not ") <~ ws.* ^^^ true
 
-    lazy val Predicate: Parser[QueryExp] = {
+    lazy val Predicate: Parser[B.Where] = {
       Parenthesized(Query).examples("(<predicate>)") |
       NotPredicate |
       InstanceOf |
       ValuePredicate
     }
 
-   lazy val NotPredicate =
-      (Not flatMap { _ => Predicate }).map(Q.not).examples("not <predicate>")
+    // not (a and b) == not a || not b
+    lazy val NotPredicate =
+      (Not flatMap { _ => Predicate }).map(_.not).examples("not <predicate>")
 
     lazy val InstanceOf =
-      (token("instanceof ") ~> (token(ws.* ~> StringLiteral)).examples("'<type name>'")).map(Q.isInstanceOf)
+      (token("instanceof ") ~> (token(ws.* ~> StringLiteral)).examples("'<type name>'")).map(B.Where.isInstanceOf)
 
+    // todo: iamhere
     lazy val ValuePredicate =
       (token(Value) flatMap { lhs => ws.* ~> {
         val dependentOnOnlyValueExp =

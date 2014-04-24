@@ -1,6 +1,6 @@
 package cjmx.util.jmx
 
-import javax.management.{MBeanServerConnection,ObjectName,QueryExp}
+import javax.management.{MBeanServerConnection,ObjectName,QueryExp,Query=>Q,StringValueExp}
 import scala.collection.JavaConverters._
 
 /** Typed API for interacting with MBeans. */
@@ -24,7 +24,8 @@ object Beans extends ToRichMBeanServerConnection {
   }
 
   case class Where(restrictions: Map[SubqueryName, QueryExp],
-                   clientSideFilter: Results => Set[ObjectName]) {
+                   clientSideFilter: Results => Set[ObjectName] = _.names) {
+
     def apply(q: Query): Query =
       sys.error("TODO: apply the restrictions server side, and delegate the rest to be run client side")
 
@@ -40,6 +41,12 @@ object Beans extends ToRichMBeanServerConnection {
 
   object Where {
     def id = Where(Map(), _.names)
+
+    def fromQueryExp(exp: QueryExp, subquery: SubqueryName = unnamed): Where =
+      Where(Map(subquery -> exp))
+
+    def isInstanceOf(s: StringValueExp): Where =
+      Where(Map(unnamed -> Q.isInstanceOf(s)))
   }
 
   case class Query(subqueries: Map[SubqueryName, Subquery],
